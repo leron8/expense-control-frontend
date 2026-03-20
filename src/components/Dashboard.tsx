@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -59,17 +59,20 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   const currency = useMemo(() => {
     return transactions[0]?.currency ?? "MXN";
   }, [transactions]);
 
   async function load() {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError(null);
     try {
       if (!companyId) {
-        setError("Set `NEXT_PUBLIC_COMPANY_ID` (or type a company id below).");
+        setError("Configura `NEXT_PUBLIC_COMPANY_ID` (o escribe un id de empresa abajo).");
         setTransactions([]);
         setReport(null);
         return;
@@ -96,11 +99,19 @@ export default function Dashboard() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }
 
   useEffect(() => {
     void load();
+
+    // Live refresh (simple polling) so the dashboard updates when new records are confirmed.
+    const interval = setInterval(() => {
+      void load();
+    }, 5000);
+
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
@@ -136,12 +147,12 @@ export default function Dashboard() {
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
         <div style={{ minWidth: 260 }}>
           <label style={{ display: "block", color: "#94a3b8", fontSize: 12, marginBottom: 6 }}>
-            Company ID
+            ID de empresa
           </label>
           <input
             value={companyId}
             onChange={(e) => setCompanyId(e.target.value)}
-            placeholder="uuid company_id"
+            placeholder="UUID (company_id)"
             style={{
               width: "100%",
               padding: "10px 12px",
@@ -164,7 +175,7 @@ export default function Dashboard() {
             cursor: "pointer"
           }}
         >
-          Refresh
+          Actualizar
         </button>
       </div>
 
@@ -174,20 +185,20 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {loading ? <div style={{ color: "#94a3b8" }}>Loading...</div> : null}
+      {loading ? <div style={{ color: "#94a3b8" }}>Cargando...</div> : null}
 
       {!loading && report ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
           <div className="card">
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>Total income</div>
+            <div style={{ color: "#94a3b8", fontSize: 12 }}>Ingresos totales</div>
             <div style={{ fontSize: 26, fontWeight: 700 }}>{formatMoney(report.incomeTotal, currency)}</div>
           </div>
           <div className="card">
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>Total expenses</div>
+            <div style={{ color: "#94a3b8", fontSize: 12 }}>Gastos totales</div>
             <div style={{ fontSize: 26, fontWeight: 700 }}>{formatMoney(report.expenseTotal, currency)}</div>
           </div>
           <div className="card">
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>Balance</div>
+            <div style={{ color: "#94a3b8", fontSize: 12 }}>Saldo</div>
             <div style={{ fontSize: 26, fontWeight: 700 }}>{formatMoney(report.balance, currency)}</div>
           </div>
         </div>
@@ -197,14 +208,14 @@ export default function Dashboard() {
 
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <div style={{ fontWeight: 700 }}>Transactions chart</div>
-          <div style={{ color: "#94a3b8", fontSize: 12 }}>Last 10</div>
+          <div style={{ fontWeight: 700 }}>Gráfica de transacciones</div>
+          <div style={{ color: "#94a3b8", fontSize: 12 }}>Últimos 10</div>
         </div>
         <div style={{ marginTop: 12 }}>
           {chartData ? (
             <Bar data={chartData as any} options={{ responsive: true, plugins: { legend: { display: true } } }} />
           ) : (
-            <div style={{ color: "#94a3b8" }}>No transactions yet.</div>
+            <div style={{ color: "#94a3b8" }}>Aún no hay transacciones.</div>
           )}
         </div>
       </div>
@@ -212,9 +223,9 @@ export default function Dashboard() {
       <div style={{ height: 14 }} />
 
       <div className="card">
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Recent transactions</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Transacciones recientes</div>
         {recent.length === 0 ? (
-          <div style={{ color: "#94a3b8" }}>No records found.</div>
+          <div style={{ color: "#94a3b8" }}>No se encontraron registros.</div>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {recent.map((t) => {
