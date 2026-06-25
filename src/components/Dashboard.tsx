@@ -28,12 +28,22 @@ type Transaction = {
   created_at: string;
 };
 
+type ExpenseByCategory = {
+  category: string;
+  amount: number;
+  percentage: number;
+};
+
 type DashboardSummary = {
   incomeTotal: number;
   expenseTotal: number;
   balance: number;
   recentTransactions: Transaction[];
-  kpis: Array<{ label: string; value: string }>;
+  expensesByCategory: ExpenseByCategory[];
+  payrollThisMonth: number;
+  activeProjects: number;
+  pendingInvoices: number;
+  activeVehicles: number;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
@@ -83,12 +93,18 @@ export default function Dashboard() {
 
       const qs = `company_id=${encodeURIComponent(companyId)}`;
       const summaryRes = await fetch(`${API_BASE_URL}/dashboard?${qs}`);
+      const summaryJson = await summaryRes.json();
 
-      if (!summaryRes.ok) throw new Error(`Failed to fetch dashboard summary (${summaryRes.status}).`);
+      if (!summaryRes.ok) {
+        const backendError =
+          summaryJson && typeof summaryJson === "object" && "error" in summaryJson
+            ? (summaryJson as { error: string }).error
+            : summaryRes.statusText;
+        throw new Error(`Failed to fetch dashboard summary (${summaryRes.status}): ${backendError}`);
+      }
 
-      const summaryJson = (await summaryRes.json()) as DashboardSummary;
-      setSummary(summaryJson);
-      setTransactions(summaryJson.recentTransactions ?? []);
+      setSummary(summaryJson as DashboardSummary);
+      setTransactions((summaryJson as DashboardSummary).recentTransactions ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -99,12 +115,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     void load();
-
-    const interval = setInterval(() => {
-      void load();
-    }, 5000);
-
-    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
@@ -170,13 +180,10 @@ export default function Dashboard() {
       ) : null}
 
       {!loading && summary ? (
-        <div className="grid gap-4 xl:grid-cols-4">
+        <div className="grid gap-4 xl:grid-cols-3">
           <KpiCard label="Total Income" value={formatMoney(summary.incomeTotal, currency)} metric="Monthly" />
           <KpiCard label="Total Expenses" value={formatMoney(summary.expenseTotal, currency)} metric="Monthly" />
           <KpiCard label="Net Balance" value={formatMoney(summary.balance, currency)} metric="Monthly" />
-          {summary.kpis.map((kpi) => (
-            <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} metric="Current" />
-          ))}
         </div>
       ) : null}
 
@@ -206,18 +213,18 @@ export default function Dashboard() {
             <h2 className="mt-3 text-xl font-semibold text-white">Expense Summary</h2>
           </div>
           <div className="grid gap-3">
-            <div className="rounded-3xl bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Labor</p>
-              <p className="mt-2 text-lg font-semibold text-white">38%</p>
-            </div>
-            <div className="rounded-3xl bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Materials</p>
-              <p className="mt-2 text-lg font-semibold text-white">27%</p>
-            </div>
-            <div className="rounded-3xl bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Equipment</p>
-              <p className="mt-2 text-lg font-semibold text-white">18%</p>
-            </div>
+            {summary?.expensesByCategory && summary.expensesByCategory.length > 0 ? (
+              summary.expensesByCategory.map((cat) => (
+                <div key={cat.category} className="rounded-3xl bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">{cat.category}</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{cat.percentage.toFixed(1)}%</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-950 p-8 text-center text-sm text-slate-500">
+                No expense data
+              </div>
+            )}
           </div>
         </Card>
       </div>
@@ -268,11 +275,15 @@ export default function Dashboard() {
             <div className="mt-6 grid gap-3">
               <div className="rounded-3xl bg-slate-900 p-4">
                 <p className="text-sm text-slate-400">This month</p>
-                <p className="mt-2 text-lg font-semibold text-white">$123,900</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {summary?.payrollThisMonth !== undefined
+                    ? formatMoney(summary.payrollThisMonth, currency)
+                    : "—"}
+                </p>
               </div>
               <div className="rounded-3xl bg-slate-900 p-4">
                 <p className="text-sm text-slate-400">Pending invoices</p>
-                <p className="mt-2 text-lg font-semibold text-white">12</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary?.pendingInvoices ?? "—"}</p>
               </div>
             </div>
           </Card>
@@ -282,12 +293,12 @@ export default function Dashboard() {
             <h2 className="mt-3 text-xl font-semibold text-white">Fleet summary</h2>
             <div className="mt-4 space-y-3">
               <div className="rounded-3xl bg-slate-900 p-4">
-                <p className="text-sm text-slate-400">Active assignments</p>
-                <p className="mt-2 text-lg font-semibold text-white">8 vehicles</p>
+                <p className="text-sm text-slate-400">Active vehicles</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary?.activeVehicles ?? 0}</p>
               </div>
               <div className="rounded-3xl bg-slate-900 p-4">
-                <p className="text-sm text-slate-400">Maintenance due</p>
-                <p className="mt-2 text-lg font-semibold text-white">3 vehicles</p>
+                <p className="text-sm text-slate-400">Active projects</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary?.activeProjects ?? 0}</p>
               </div>
             </div>
           </Card>
