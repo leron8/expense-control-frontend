@@ -16,35 +16,9 @@ import { Skeleton } from "./ui/Skeleton";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-type Transaction = {
-  id: string;
-  company_id: string;
-  type: "income" | "expense";
-  amount: string;
-  currency: string;
-  description: string | null;
-  client: string | null;
-  category: string | null;
-  created_at: string;
-};
+import type { TransactionRow, DashboardSummary, ExpenseByCategory } from "@shared/finance-types";
 
-type ExpenseByCategory = {
-  category: string;
-  amount: number;
-  percentage: number;
-};
-
-type DashboardSummary = {
-  incomeTotal: number;
-  expenseTotal: number;
-  balance: number;
-  recentTransactions: Transaction[];
-  expensesByCategory: ExpenseByCategory[];
-  payrollThisMonth: number;
-  activeProjects: number;
-  pendingInvoices: number;
-  activeVehicles: number;
-};
+export type Transaction = TransactionRow;
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 const DEFAULT_COMPANY_ID = process.env.NEXT_PUBLIC_COMPANY_ID || "";
