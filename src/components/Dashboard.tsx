@@ -16,9 +16,7 @@ import { Skeleton } from "./ui/Skeleton";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-import type { TransactionRow, DashboardSummary, ExpenseByCategory } from "@shared/finance-types";
-
-export type Transaction = TransactionRow;
+import type { MovementResponse, DashboardSummary } from "@shared/finance-types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 const DEFAULT_COMPANY_ID = process.env.NEXT_PUBLIC_COMPANY_ID || "";
@@ -34,23 +32,35 @@ function formatMoney(amount: number, currency: string) {
   }
 }
 
-function monthKey(d: Date) {
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
-}
+const MOVEMENT_KIND_LABELS: Record<string, string> = {
+  client_income: "Ingreso de cliente",
+  cash_income: "Ingreso en efectivo",
+  expense: "Gasto general",
+  supplier_payment: "Pago a proveedor",
+  fuel_expense: "Gasolina",
+  payroll_payment: "Nómina",
+  employee_loan_disbursement: "Préstamo empleado",
+  employee_loan_repayment: "Pago préstamo empleado",
+  partner_loan_disbursement: "Préstamo socio",
+  partner_loan_repayment: "Pago préstamo socio",
+  card_funding: "Fondeo tarjeta",
+  bank_fee: "Comisión bancaria",
+  tax_payment: "Pago de impuestos",
+  internal_transfer: "Transferencia",
+  adjustment: "Ajuste"
+};
 
 export default function Dashboard() {
   const [companyId, setCompanyId] = useState(DEFAULT_COMPANY_ID);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [movements, setMovements] = useState<MovementResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
 
   const currency = useMemo(() => {
-    return transactions[0]?.currency ?? "MXN";
-  }, [transactions]);
+    return movements[0]?.currency ?? "MXN";
+  }, [movements]);
 
   async function load() {
     if (inFlight.current) return;
@@ -60,7 +70,7 @@ export default function Dashboard() {
     try {
       if (!companyId) {
         setError("Configura `NEXT_PUBLIC_COMPANY_ID` (o escribe un id de empresa abajo).");
-        setTransactions([]);
+        setMovements([]);
         setSummary(null);
         return;
       }
@@ -78,7 +88,7 @@ export default function Dashboard() {
       }
 
       setSummary(summaryJson as DashboardSummary);
-      setTransactions((summaryJson as DashboardSummary).recentTransactions ?? []);
+      setMovements((summaryJson as DashboardSummary).recentMovements ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -93,12 +103,12 @@ export default function Dashboard() {
   }, [companyId]);
 
   const chartData = useMemo(() => {
-    const tx = [...transactions].slice(0, 10).reverse(); // oldest -> newest
+    const tx = [...movements].slice(0, 10).reverse();
     if (tx.length === 0) return null;
 
     const labels = tx.map((t) => new Date(t.created_at).toLocaleDateString("es-MX"));
-    const income = tx.map((t) => (t.type === "income" ? Number(t.amount) : 0));
-    const expense = tx.map((t) => (t.type === "expense" ? Number(t.amount) : 0));
+    const income = tx.map((t) => (t.direction === "in" ? Number(t.amount) : 0));
+    const expense = tx.map((t) => (t.direction === "out" ? Number(t.amount) : 0));
 
     return {
       labels,
@@ -115,9 +125,7 @@ export default function Dashboard() {
         }
       ]
     };
-  }, [transactions]);
-
-  const recent = transactions.slice(0, 8);
+  }, [movements]);
 
   return (
     <div className="space-y-6">
@@ -208,22 +216,21 @@ export default function Dashboard() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Recent Activity</p>
-              <h2 className="mt-2 text-xl font-semibold text-white">Latest transactions</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">Latest movements</h2>
             </div>
           </div>
           <div className="space-y-3">
-            {transactions.length === 0 ? (
+            {movements.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
                 No recent activity found.
               </div>
             ) : (
-              transactions.map((t) => {
+              movements.map((t) => {
                 const created = new Date(t.created_at).toLocaleString("es-MX");
                 const amt = Number(t.amount);
-                const signColor = t.type === "income" ? "text-emerald-400" : "text-rose-400";
-                const label =
-                  t.description ??
-                  (t.client ? `${t.type === "income" ? "Income from" : "Expense to"} ${t.client}` : t.category ?? "No description");
+                const signColor = t.direction === "in" ? "text-emerald-400" : "text-rose-400";
+                const kindLabel = MOVEMENT_KIND_LABELS[t.movement_kind] ?? t.movement_kind;
+                const label = t.description || kindLabel;
 
                 return (
                   <div key={t.id} className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
@@ -231,6 +238,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium text-white">{label}</p>
                         <p className="mt-1 text-xs text-slate-500">{created}</p>
+                        <p className="mt-0.5 text-xs text-slate-600">{kindLabel}</p>
                       </div>
                       <p className={`text-sm font-semibold ${signColor}`}>{formatMoney(amt, currency)}</p>
                     </div>
@@ -243,28 +251,29 @@ export default function Dashboard() {
 
         <div className="grid gap-4">
           <Card>
-            <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Payroll</p>
-            <h2 className="mt-3 text-xl font-semibold text-white">Team payroll</h2>
-            <p className="mt-4 text-sm text-slate-400">Ongoing payroll obligations across active projects.</p>
-            <div className="mt-6 grid gap-3">
-              <div className="rounded-3xl bg-slate-900 p-4">
-                <p className="text-sm text-slate-400">This month</p>
-                <p className="mt-2 text-lg font-semibold text-white">
-                  {summary?.payrollThisMonth !== undefined
-                    ? formatMoney(summary.payrollThisMonth, currency)
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-3xl bg-slate-900 p-4">
-                <p className="text-sm text-slate-400">Pending invoices</p>
-                <p className="mt-2 text-lg font-semibold text-white">{summary?.pendingInvoices ?? "—"}</p>
-              </div>
+            <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Accounts</p>
+            <h2 className="mt-3 text-xl font-semibold text-white">Account balances</h2>
+            <div className="mt-4 grid gap-3">
+              {summary?.accountBalances && summary.accountBalances.length > 0 ? (
+                summary.accountBalances.slice(0, 4).map((acc) => (
+                  <div key={acc.account_id} className="rounded-3xl bg-slate-900 p-4">
+                    <p className="text-sm text-slate-400">{acc.account_name}</p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {formatMoney(acc.current_balance, acc.currency)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-3xl bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">No accounts configured</p>
+                </div>
+              )}
             </div>
           </Card>
 
           <Card>
-            <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Vehicles</p>
-            <h2 className="mt-3 text-xl font-semibold text-white">Fleet summary</h2>
+            <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Summary</p>
+            <h2 className="mt-3 text-xl font-semibold text-white">Projects & fleet</h2>
             <div className="mt-4 space-y-3">
               <div className="rounded-3xl bg-slate-900 p-4">
                 <p className="text-sm text-slate-400">Active vehicles</p>
@@ -274,6 +283,10 @@ export default function Dashboard() {
                 <p className="text-sm text-slate-400">Active projects</p>
                 <p className="mt-2 text-lg font-semibold text-white">{summary?.activeProjects ?? 0}</p>
               </div>
+              <div className="rounded-3xl bg-slate-900 p-4">
+                <p className="text-sm text-slate-400">Pending documents</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary?.pendingDocuments ?? 0}</p>
+              </div>
             </div>
           </Card>
         </div>
@@ -281,4 +294,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

@@ -4,18 +4,27 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Card } from "../../components/ui/Card";
 import { API_BASE_URL, DEFAULT_COMPANY_ID, fetchJson, formatMoney, getRoleLabel, useDemoRole } from "../../lib/finance-demo";
 
+const MOVEMENT_KIND_LABELS: Record<string, string> = {
+  client_income: "Ingreso de cliente",
+  cash_income: "Ingreso en efectivo",
+  invoice_exchange: "Intercambio factura",
+  partner_loan_repayment: "Pago préstamo socio",
+  employee_loan_repayment: "Pago préstamo empleado"
+};
+
 const defaultForm = {
   description: "",
   amount: "",
   currency: "MXN",
-  transaction_type: "income",
-  client: "",
+  movement_kind: "client_income",
+  account_id: "",
   notes: ""
 };
 
 export default function IncomePage() {
   const [companyId, setCompanyId] = useState(DEFAULT_COMPANY_ID);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [form, setForm] = useState(defaultForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,8 +37,12 @@ export default function IncomePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchJson(`${API_BASE_URL}/transactions?company_id=${encodeURIComponent(companyId)}&type=income`);
-      setTransactions(data.transactions ?? []);
+      const [movData, accData] = await Promise.all([
+        fetchJson(`${API_BASE_URL}/movements?company_id=${encodeURIComponent(companyId)}&direction=in`),
+        fetchJson(`${API_BASE_URL}/accounts?company_id=${encodeURIComponent(companyId)}`)
+      ]);
+      setMovements(movData.movements ?? []);
+      setAccounts(accData.accounts ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -52,11 +65,16 @@ export default function IncomePage() {
     setError(null);
     try {
       const payload = {
-        ...form,
+        account_id: form.account_id || null,
+        movement_date: new Date().toISOString().slice(0, 10),
+        direction: "in" as const,
+        movement_kind: form.movement_kind,
         amount: Number(form.amount),
-        transaction_type: "income"
+        currency: form.currency,
+        description: form.description || null,
+        notes: form.notes || null
       };
-      const url = `${API_BASE_URL}/transactions${editingId ? `/${editingId}` : ""}?company_id=${encodeURIComponent(companyId)}`;
+      const url = `${API_BASE_URL}/movements${editingId ? `/${editingId}` : ""}?company_id=${encodeURIComponent(companyId)}`;
       await fetchJson(url, {
         method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json", "x-user-role": role },
@@ -78,8 +96,8 @@ export default function IncomePage() {
       description: item.description ?? "",
       amount: String(item.amount ?? ""),
       currency: item.currency ?? "MXN",
-      transaction_type: "income",
-      client: item.client ?? "",
+      movement_kind: item.movement_kind ?? "client_income",
+      account_id: item.account_id ?? "",
       notes: item.notes ?? ""
     });
   }
@@ -87,7 +105,7 @@ export default function IncomePage() {
   async function handleDelete(itemId: string) {
     if (!companyId) return;
     try {
-      await fetchJson(`${API_BASE_URL}/transactions/${itemId}?company_id=${encodeURIComponent(companyId)}`, {
+      await fetchJson(`${API_BASE_URL}/movements/${itemId}?company_id=${encodeURIComponent(companyId)}`, {
         method: "DELETE",
         headers: { "x-user-role": role }
       });
@@ -97,7 +115,7 @@ export default function IncomePage() {
     }
   }
 
-  const totalIncome = useMemo(() => transactions.reduce((sum, row) => sum + Number(row.amount ?? 0), 0), [transactions]);
+  const totalIncome = useMemo(() => movements.reduce((sum, row) => sum + Number(row.amount ?? 0), 0), [movements]);
 
   return (
     <div className="space-y-6">
@@ -138,12 +156,28 @@ export default function IncomePage() {
               className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-100"
               required
             />
-            <input
-              value={form.client}
-              onChange={(e) => setForm({ ...form, client: e.target.value })}
-              placeholder="Client / source"
+            <select
+              value={form.account_id}
+              onChange={(e) => setForm({ ...form, account_id: e.target.value })}
               className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-100"
-            />
+              required
+            >
+              <option value="">-- Select account --</option>
+              {accounts.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.name} ({a.account_type})</option>
+              ))}
+            </select>
+            <select
+              value={form.movement_kind}
+              onChange={(e) => setForm({ ...form, movement_kind: e.target.value })}
+              className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-100"
+            >
+              <option value="client_income">Ingreso de cliente</option>
+              <option value="cash_income">Ingreso en efectivo</option>
+              <option value="invoice_exchange">Intercambio factura</option>
+              <option value="partner_loan_repayment">Pago préstamo socio</option>
+              <option value="employee_loan_repayment">Pago préstamo empleado</option>
+            </select>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -174,29 +208,33 @@ export default function IncomePage() {
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Income entries</h2>
-          <span className="text-sm text-slate-400">{transactions.length} records</span>
+          <span className="text-sm text-slate-400">{movements.length} records</span>
         </div>
         {loading ? <p className="text-sm text-slate-500">Loading...</p> : null}
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
         <div className="space-y-3">
-          {transactions.map((item) => (
-            <div key={item.id} className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium text-white">{item.description}</p>
-                  <p className="mt-1 text-sm text-slate-500">{item.client || "No source"}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-emerald-400">{formatMoney(Number(item.amount), item.currency || "MXN")}</p>
-                  <p className="mt-1 text-xs text-slate-500">{new Date(item.created_at).toLocaleString("es-MX")}</p>
-                  <div className="mt-3 flex justify-end gap-2">
-                    <button onClick={() => void handleEdit(item)} className="rounded-2xl border border-slate-700 px-3 py-2 text-xs text-slate-300">Edit</button>
-                    <button onClick={() => void handleDelete(item.id)} className="rounded-2xl border border-rose-600/40 px-3 py-2 text-xs text-rose-300">Delete</button>
+          {movements.map((item) => {
+            const kindLabel = MOVEMENT_KIND_LABELS[item.movement_kind] ?? item.movement_kind;
+            return (
+              <div key={item.id} className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-white">{item.description}</p>
+                    <p className="mt-1 text-sm text-slate-500">{kindLabel}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">Mov date: {item.movement_date}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-emerald-400">{formatMoney(Number(item.amount), item.currency || "MXN")}</p>
+                    <p className="mt-1 text-xs text-slate-500">{new Date(item.created_at).toLocaleString("es-MX")}</p>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button onClick={() => void handleEdit(item)} className="rounded-2xl border border-slate-700 px-3 py-2 text-xs text-slate-300">Edit</button>
+                      <button onClick={() => void handleDelete(item.id)} className="rounded-2xl border border-rose-600/40 px-3 py-2 text-xs text-rose-300">Delete</button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </div>
