@@ -1,11 +1,6 @@
-import Dashboard from "../components/Dashboard";
+import AppShell from "../components/AppShell";
 
 export default function Page() {
-  return (
-    <div className="container">
-      <h1 style={{ margin: "0 0 16px" }}>Registro de Gastos por Voz</h1>
-      <Dashboard />
-    </div>
-  );
+  return <AppShell />;
 }
 
