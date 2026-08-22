@@ -1,9 +1,11 @@
+import { getActiveOrganizationId, getAuthToken } from "./session";
+
 // Caja Fácil - API client
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("cf_token") : null;
-  const orgId = typeof window !== "undefined" ? localStorage.getItem("cf_org_id") : null;
+  const token = getAuthToken();
+  const orgId = getActiveOrganizationId();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

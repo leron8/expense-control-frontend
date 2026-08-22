@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createOrganization } from "../../lib/api";
+import { setActiveOrganizationId } from "../../lib/session";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const result = await createOrganization(name);
-      localStorage.setItem("cf_org_id", result.organization.id);
+      setActiveOrganizationId(result.organization.id);
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear el negocio");

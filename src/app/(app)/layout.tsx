@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, DollarSign, CreditCard, Users, Building2, FileText, LogOut } from "lucide-react";
+import { clearSession } from "../../lib/session";
 
 const navItems = [
   { href: "/", label: "Inicio", icon: LayoutDashboard },
@@ -18,8 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   function handleLogout() {
-    localStorage.removeItem("cf_token");
-    localStorage.removeItem("cf_org_id");
+    clearSession();
     router.push("/auth/login");
   }
 

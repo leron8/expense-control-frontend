@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getMe } from "../../../lib/api";
+import { clearSession, setActiveOrganizationId, setAuthToken } from "../../../lib/session";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -14,22 +16,22 @@ export default function AuthCallbackPage() {
       const params = new URLSearchParams(hash.replace("#", ""));
       const token = params.get("access_token");
       if (token) {
-        localStorage.setItem("cf_token", token);
+        setAuthToken(token);
         setStatus("¡Sesión iniciada! Redirigiendo...");
-        // Verificar si tiene organizaciones
-        fetch("/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((r) => r.json())
+        // getMe uses the configured backend API URL and the stored bearer token.
+        getMe()
           .then((data) => {
             if (data.organizations && data.organizations.length > 0) {
-              localStorage.setItem("cf_org_id", data.organizations[0].id);
+              setActiveOrganizationId(data.organizations[0].id);
               router.push("/");
             } else {
               router.push("/onboarding");
             }
           })
-          .catch(() => router.push("/onboarding"));
+          .catch(() => {
+            clearSession();
+            router.push("/auth/login");
+          });
         return;
       }
     }
