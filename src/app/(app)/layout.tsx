@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, DollarSign, CreditCard, Users, Building2, FileText, LogOut } from "lucide-react";
-import { clearSession } from "../../lib/session";
+import { clearSession, getActiveOrganizationId, getAuthToken } from "../../lib/session";
 
 const navItems = [
   { href: "/", label: "Inicio", icon: LayoutDashboard },
@@ -17,10 +18,27 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [isSessionReady, setIsSessionReady] = useState(false);
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      router.replace("/auth/login");
+      return;
+    }
+    if (!getActiveOrganizationId()) {
+      router.replace("/onboarding");
+      return;
+    }
+    setIsSessionReady(true);
+  }, [router]);
 
   function handleLogout() {
     clearSession();
     router.push("/auth/login");
+  }
+
+  if (!isSessionReady) {
+    return <main className="flex min-h-screen items-center justify-center text-slate-400">Cargando...</main>;
   }
 
   return (
