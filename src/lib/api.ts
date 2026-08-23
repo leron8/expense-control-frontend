@@ -54,6 +54,15 @@ export type Transaction = {
   created_at: string;
 };
 
+export type DashboardData = {
+  incomeTotal: number;
+  expenseTotal: number;
+  balance: number;
+  recentTransactions: Transaction[];
+  expensesByCategory: { category: string; amount: number; percentage: number }[];
+  accountBalances: { account_id: string; account_name: string; current_balance: number; currency: string }[];
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
   const orgId = getActiveOrganizationId();
@@ -126,15 +135,12 @@ export async function deleteTransaction(id: string) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────
-export async function getDashboard() {
-  return apiFetch<{
-    incomeTotal: number;
-    expenseTotal: number;
-    balance: number;
-    recentTransactions: Transaction[];
-    expensesByCategory: { category: string; amount: number; percentage: number }[];
-    accountBalances: { account_id: string; account_name: string; current_balance: number; currency: string }[];
-  }>("/api/dashboard");
+export async function getDashboard(params?: { startDate?: string; endDate?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.startDate) qs.set("start_date", params.startDate);
+  if (params?.endDate) qs.set("end_date", params.endDate);
+  const query = qs.toString();
+  return apiFetch<DashboardData>(`/api/dashboard${query ? `?${query}` : ""}`);
 }
 
 // ── Clients ───────────────────────────────────────────────────────────
