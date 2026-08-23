@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getMe } from "../../../lib/api";
-import { clearSession, setActiveOrganizationId, setAuthToken } from "../../../lib/session";
+import { setAuthToken } from "../../../lib/session";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -17,26 +16,13 @@ export default function AuthCallbackPage() {
       const token = params.get("access_token");
       if (token) {
         setAuthToken(token);
-        setStatus("¡Sesión iniciada! Redirigiendo...");
-        // getMe uses the configured backend API URL and the stored bearer token.
-        getMe()
-          .then((data) => {
-            if (data.organizations && data.organizations.length > 0) {
-              setActiveOrganizationId(data.organizations[0].id);
-              router.push("/");
-            } else {
-              router.push("/onboarding");
-            }
-          })
-          .catch(() => {
-            clearSession();
-            router.push("/auth/login");
-          });
+        setStatus("Preparando tu espacio personal...");
+        router.replace("/onboarding");
         return;
       }
     }
     setStatus("Enlace inválido o expirado. Intenta de nuevo.");
-    setTimeout(() => router.push("/auth/login"), 3000);
+    setTimeout(() => router.replace("/auth/login"), 3000);
   }, [router]);
 
   return (

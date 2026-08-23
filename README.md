@@ -16,10 +16,15 @@ Copy `.env.example` to `.env.local`:
 
 - `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:3001`)
 
-## What it shows
+## Authentication and workspace selection
 
-- Total income / total expenses / balance
-- Recent transactions list
+After Magic Link authentication, the frontend finishes the session in
+`/auth/callback`, lets the backend guarantee a workspace for the caller, and
+stores the active organization in local storage as `cf_org_id`.
 
-The active organization is selected after authentication and sent to the API as
-the `x-org-id` header. It is never configured as a public environment variable.
+First-time users are sent through a short "Preparing your personal workspace"
+screen. Existing users reuse one of their current organizations without seeing
+the old required business-name form.
+
+The active organization is sent to the API as the `x-org-id` header. It is
+never configured as a public environment variable.

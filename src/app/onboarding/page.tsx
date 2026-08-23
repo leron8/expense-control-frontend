@@ -1,54 +1,84 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createOrganization } from "../../lib/api";
-import { setActiveOrganizationId } from "../../lib/session";
+import { clearSession, getAuthToken } from "../../lib/session";
+import {
+  getWorkspaceSetupErrorMessage,
+  initializeActiveOrganization,
+  shouldResetSession,
+} from "../../lib/organizations";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function prepareWorkspace() {
     setLoading(true);
     setError(null);
+
     try {
-      const result = await createOrganization(name);
-      setActiveOrganizationId(result.organization.id);
-      router.push("/");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear el negocio");
+      await initializeActiveOrganization();
+      router.replace("/");
+    } catch (currentError) {
+      if (shouldResetSession(currentError)) {
+        clearSession();
+        router.replace("/auth/login");
+        return;
+      }
+
+      setError(getWorkspaceSetupErrorMessage(currentError));
     } finally {
       setLoading(false);
     }
   }
 
+  useEffect(() => {
+    if (!getAuthToken()) {
+      router.replace("/auth/login");
+      return;
+    }
+
+    void prepareWorkspace();
+  }, [router]);
+
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white">¡Bienvenido a Caja Fácil!</h1>
-          <p className="mt-2 text-sm text-slate-400">Crea tu negocio para empezar</p>
+      <div className="w-full max-w-sm space-y-6 text-center">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-white">
+            {error ? "No pudimos preparar tu espacio personal" : "Preparando tu espacio personal..."}
+          </h1>
+          <p className="text-sm text-slate-400">
+            {error ? error : "Esto toma solo un momento y te lleva directo al dashboard."}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nombre de tu negocio"
-            required
-            minLength={2}
-          />
+        {loading ? (
+          <div className="space-y-3">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-800 border-t-cyan-400" />
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Creating workspace</p>
+          </div>
+        ) : null}
 
-          {error && <p className="text-sm text-rose-400">{error}</p>}
-
-          <button type="submit" disabled={loading || !name.trim()} className="primary">
-            {loading ? "Creando..." : "Crear mi negocio"}
-          </button>
-        </form>
+        {error ? (
+          <div className="space-y-3">
+            <button type="button" onClick={() => void prepareWorkspace()} className="primary">
+              Intentar nuevamente
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearSession();
+                router.replace("/auth/login");
+              }}
+              className="w-full rounded-xl border border-slate-800 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-slate-700 hover:text-white"
+            >
+              Volver al login
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

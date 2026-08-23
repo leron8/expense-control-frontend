@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Caja Fácil",
-  description: "Control financiero simple para tu negocio",
+  description: "Control financiero personal y para pequenos negocios",
   manifest: "/manifest.json",
   themeColor: "#020617",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Caja Fácil" },
