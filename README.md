@@ -18,9 +18,10 @@ Copy `.env.example` to `.env.local`:
 
 ## Authentication and workspace selection
 
-After Magic Link authentication, the frontend finishes the session in
-`/auth/callback`, lets the backend guarantee a workspace for the caller, and
-stores the active organization in local storage as `cf_org_id`.
+The frontend signs users in with Supabase email/password authentication through
+the backend auth routes. Email-confirmation links finish in `/auth/callback`,
+password-recovery links finish in `/auth/reset-password`, and both flows keep
+using the existing local session token plus `cf_org_id` workspace selection.
 
 First-time users are sent through a short "Preparing your personal workspace"
 screen. Existing users reuse one of their current organizations without seeing

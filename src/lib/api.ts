@@ -3,6 +3,18 @@ import { getActiveOrganizationId, getAuthToken } from "./session";
 // Caja Fácil - API client
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export type Direction = "in" | "out";
 export type AccountType = "bank" | "cash" | "credit_card" | "other";
 export type PaymentMethod = "cash" | "bank_transfer" | "card" | "cheque" | "other";
@@ -63,6 +75,13 @@ export type DashboardData = {
   accountBalances: { account_id: string; account_name: string; current_balance: number; currency: string }[];
 };
 
+export type AuthResponse = {
+  user: { id: string | null; email: string };
+  accessToken: string | null;
+  requiresEmailConfirmation: boolean;
+  message: string;
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
   const orgId = getActiveOrganizationId();
@@ -82,17 +101,41 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     const message = typeof data === "object" && data && "error" in data
       ? String((data as { error: string }).error)
       : `Request failed with ${res.status}`;
-    throw new Error(message);
+    const code = typeof data === "object" && data && "code" in data
+      ? String((data as { code: string }).code)
+      : undefined;
+    throw new ApiError(message, res.status, code);
   }
 
   return data as T;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────
-export async function sendMagicLink(email: string): Promise<void> {
-  await apiFetch("/auth/magic-link", {
+export async function loginWithPassword(email: string, password: string): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function registerWithPassword(email: string, password: string): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+  return apiFetch<{ ok: boolean; message: string }>("/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
+  });
+}
+
+export async function updatePassword(password: string): Promise<{ ok: boolean; message: string }> {
+  return apiFetch<{ ok: boolean; message: string }>("/auth/update-password", {
+    method: "POST",
+    body: JSON.stringify({ password }),
   });
 }
 

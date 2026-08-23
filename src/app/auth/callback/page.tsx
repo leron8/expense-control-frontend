@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { readAuthFragment } from "../../../lib/auth";
 import { setAuthToken } from "../../../lib/session";
 
 export default function AuthCallbackPage() {
@@ -9,19 +10,16 @@ export default function AuthCallbackPage() {
   const [status, setStatus] = useState("Procesando...");
 
   useEffect(() => {
-    // El hash de Supabase viene en la URL después del redirect
-    const hash = window.location.hash;
-    if (hash && hash.includes("access_token")) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      const token = params.get("access_token");
-      if (token) {
-        setAuthToken(token);
-        setStatus("Preparando tu espacio personal...");
-        router.replace("/onboarding");
-        return;
-      }
+    const { accessToken, type, errorDescription } = readAuthFragment(window.location.hash);
+
+    if (accessToken) {
+      setAuthToken(accessToken);
+      setStatus(type === "recovery" ? "Preparando el restablecimiento..." : "Preparando tu espacio personal...");
+      router.replace(type === "recovery" ? "/auth/reset-password" : "/onboarding");
+      return;
     }
-    setStatus("Enlace inválido o expirado. Intenta de nuevo.");
+
+    setStatus(errorDescription ?? "Enlace inválido o expirado. Intenta de nuevo.");
     setTimeout(() => router.replace("/auth/login"), 3000);
   }, [router]);
 
